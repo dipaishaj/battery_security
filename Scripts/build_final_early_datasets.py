@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 
@@ -133,6 +134,24 @@ def main():
         df["cycle_label_3name"] = df[label_col]
 
     df = add_cross_window_growth_features(df)
+
+    # Additional ultra-early 2s features
+    if {"early2_power_std", "early2_power_mean"}.issubset(df.columns):
+        df["early2_power_stability"] = df["early2_power_std"] / (df["early2_power_mean"].abs() + 1e-6)
+    if {"early2_dvdt_std", "early2_dvdt_mean"}.issubset(df.columns):
+        df["early2_dvdt_stability"] = df["early2_dvdt_std"] / (df["early2_dvdt_mean"].abs() + 1e-6)
+    if "early2_V_sag" in df.columns:
+        df["early2_voltage_drop_rate"] = df["early2_V_sag"] / (2.0 + 1e-6)
+    if {"early2_IR_early", "early2_I_mean"}.issubset(df.columns):
+        df["early2_IR_norm"] = df["early2_IR_early"] / (df["early2_I_mean"].abs() + 1e-6)
+
+    # Extra 1->2 growth features
+    if {"early2_IR_early", "early1_IR_early"}.issubset(df.columns):
+        df["IR_growth_1_to_2_extra"] = df["early2_IR_early"] - df["early1_IR_early"]
+    if {"early2_V_sag", "early1_V_sag"}.issubset(df.columns):
+        df["sag_growth_1_to_2_extra"] = df["early2_V_sag"] - df["early1_V_sag"]
+    if {"early2_dvdt_std", "early1_dvdt_std"}.issubset(df.columns):
+        df["dvdt_std_growth_1_to_2_extra"] = df["early2_dvdt_std"] - df["early1_dvdt_std"]
 
     print("Final label counts:")
     print(df["cycle_label_3name"].value_counts(dropna=False))

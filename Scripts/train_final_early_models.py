@@ -10,6 +10,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from collections import defaultdict
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
@@ -137,10 +138,11 @@ def plot_metric_lines(summary_df: pd.DataFrame, out_dir: Path, syn=False) -> Non
         plt.ylabel(metric.replace("_", " ").title())
         plt.title(f"{metric.replace('_', ' ').title()} vs Time Window")
         plt.xticks(sorted(summary_df["window_sec"].unique()))
-        plt.ylim([.75, .95])
+        plt.ylim([.80, .95])
         plt.legend()
         plt.tight_layout()
         plt.savefig(out_dir / f"lineplot_{metric}.png", dpi=200, bbox_inches="tight")
+        plt.show()
         plt.close('all')
 
 
@@ -171,21 +173,6 @@ def build_model(model_name: str, random_state: int):
             random_state=random_state,
             n_jobs=-1,
         )
-
-    # if model_name == "XGB":
-    #     return XGBClassifier(
-    #         n_estimators=800,
-    #         max_depth=5,
-    #         learning_rate=0.04,
-    #         subsample=0.8,
-    #         colsample_bytree=0.7,
-    #         min_child_weight=4,
-    #         reg_lambda=2.0,
-    #         objective="multi:softprob",
-    #         eval_metric="mlogloss",
-    #         random_state=random_state,
-    #         n_jobs=-1,
-    #     )
 
     if model_name == "MLP":
         return MLPClassifier(
@@ -336,12 +323,9 @@ def train_models(args, syn_args):
     le.fit(ref_df[LABEL_COL].astype(str).values)
     class_names = list(le.classes_)
 
-    
 
     for path in dataset_paths:
         window_sec = infer_window_from_name(path)
-        if window_sec != 10:
-            pass
         df = load_dataset(path)
         df = df.sort_values(["file", "Cycle"]).reset_index(drop=True)
 
@@ -408,7 +392,14 @@ def train_models(args, syn_args):
                 output_dict=True,
                 zero_division=0,
             )
-            cm = confusion_matrix(y_test, y_pred, labels=np.arange(len(class_names)))
+            cm = confusion_matrix(y_test, y_pred, labels=np.arange(len(class_names))).astype(float)
+
+            args.cm_rows.append({
+                "window_sec": window_sec,
+                "model": model_name,
+                "random_state": args.random_state,
+                "cm": cm
+            })
 
             model_dir = args.results_dir / model_name
             model_dir.mkdir(parents=True, exist_ok=True)
@@ -517,27 +508,64 @@ def main():
     
     args.summary_rows = []
     args.feature_rows = []
+    args.cm_rows = []
 
     args.results_dir.mkdir(parents=True, exist_ok=True)
 
     start_seed = args.random_state
-    for args.random_state in range(start_seed, start_seed+args.n_runs):
-        train_models(args, syn_args)
+    # for args.random_state in range(start_seed, start_seed+args.n_runs):
+    #     train_models(args, syn_args)
 
-    summary_df = pd.DataFrame(args.summary_rows).sort_values(["model", "window_sec", 'random_state']).reset_index(drop=True)
-    feature_df = pd.DataFrame(args.feature_rows).drop_duplicates().sort_values("window_sec").reset_index(drop=True)
-
-    summary_df.to_csv(args.results_dir / "metrics_summary.csv", index=False)
-    feature_df.to_csv(args.results_dir / "feature_counts.csv", index=False)
+    # summary_df = pd.DataFrame(args.summary_rows).sort_values(["model", "window_sec", 'random_state']).reset_index(drop=True)
+    # feature_df = pd.DataFrame(args.feature_rows).drop_duplicates().sort_values("window_sec").reset_index(drop=True)
+    #
+    # summary_df.to_csv(args.results_dir / "metrics_summary.csv", index=False)
+    # feature_df.to_csv(args.results_dir / "feature_counts.csv", index=False)
+    summary_df = pd.read_csv(args.results_dir / "metrics_summary.csv")
     plot_metric_lines(summary_df, args.results_dir, syn_args.use_syn)
 
-    print(f"\nSaved metrics to: {args.results_dir / 'metrics_summary.csv'}")
-    print(f"Saved feature counts to: {args.results_dir / 'feature_counts.csv'}")
-    print(f"Saved plots to: {args.results_dir}")
-    print(f"Completed training and evaluation in {timedelta(seconds=time.time()-tic)}")
-
+    # ----- mean confusion matrices across runs -----
+    # cm_groups = defaultdict(list)
+    #
+    # for row in args.cm_rows:
+    #     key = (row["model"], row["window_sec"])
+    #     cm_groups[key].append(row["cm"])
+    #
+    # # class names from the last train_models call are not directly available here,
+    # # so rebuild from the largest dataset
+    # dataset_paths = sorted(args.data_dir.glob("final_early_*s.csv"), key=infer_window_from_name)
+    # ref_path = max(dataset_paths, key=infer_window_from_name)
+    # ref_df = load_dataset(ref_path)
+    # le = LabelEncoder()
+    # le.fit(ref_df[LABEL_COL].astype(str).values)
+    # class_names = list(le.classes_)
+    #
+    # for (model_name, window_sec), cms in cm_groups.items():
+    #     cm_mean = np.mean(np.stack(cms, axis=0), axis=0)
+    #
+    #     # row-normalize for paper-ready plotting
+    #     row_sums = cm_mean.sum(axis=1, keepdims=True)
+    #     row_sums[row_sums == 0] = 1.0
+    #     cm_mean_norm = cm_mean / row_sums
+    #
+    #     model_dir = args.results_dir / model_name
+    #     model_dir.mkdir(parents=True, exist_ok=True)
+    #
+    #     save_confusion_matrix(
+    #         cm=cm_mean_norm,
+    #         class_names=class_names,
+    #         out_csv=model_dir / f"confusion_matrix_mean_{window_sec}s.csv",
+    #         out_png=model_dir / f"confusion_matrix_mean_{window_sec}s.png",
+    #         title=f"{model_name} Mean Confusion Matrix ({window_sec}s)",
+    #     )
+    #
+    # print(f"\nSaved metrics to: {args.results_dir / 'metrics_summary.csv'}")
+    # print(f"Saved feature counts to: {args.results_dir / 'feature_counts.csv'}")
+    # print(f"Saved plots to: {args.results_dir}")
+    # print(f"Completed training and evaluation in {timedelta(seconds=time.time()-tic)}")
+    #
 
 if __name__ == "__main__":
     main()
-    import winsound
-    winsound.Beep(500, 500)
+    # import winsound
+    # winsound.Beep(500, 500)

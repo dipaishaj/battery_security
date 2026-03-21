@@ -513,15 +513,15 @@ def main():
     args.results_dir.mkdir(parents=True, exist_ok=True)
 
     start_seed = args.random_state
-    # for args.random_state in range(start_seed, start_seed+args.n_runs):
-    #     train_models(args, syn_args)
+    for args.random_state in range(start_seed, start_seed+args.n_runs):
+        train_models(args, syn_args)
 
-    # summary_df = pd.DataFrame(args.summary_rows).sort_values(["model", "window_sec", 'random_state']).reset_index(drop=True)
-    # feature_df = pd.DataFrame(args.feature_rows).drop_duplicates().sort_values("window_sec").reset_index(drop=True)
-    #
-    # summary_df.to_csv(args.results_dir / "metrics_summary.csv", index=False)
-    # feature_df.to_csv(args.results_dir / "feature_counts.csv", index=False)
-    summary_df = pd.read_csv(args.results_dir / "metrics_summary.csv")
+    summary_df = pd.DataFrame(args.summary_rows).sort_values(["model", "window_sec", 'random_state']).reset_index(drop=True)
+    feature_df = pd.DataFrame(args.feature_rows).drop_duplicates().sort_values("window_sec").reset_index(drop=True)
+
+    summary_df.to_csv(args.results_dir / "metrics_summary.csv", index=False)
+    feature_df.to_csv(args.results_dir / "feature_counts.csv", index=False)
+    # summary_df = pd.read_csv(args.results_dir / "metrics_summary.csv")
     plot_metric_lines(summary_df, args.results_dir, syn_args.use_syn)
 
     # ----- mean confusion matrices across runs -----
@@ -559,10 +559,10 @@ def main():
     #         title=f"{model_name} Mean Confusion Matrix ({window_sec}s)",
     #     )
     #
-    # print(f"\nSaved metrics to: {args.results_dir / 'metrics_summary.csv'}")
-    # print(f"Saved feature counts to: {args.results_dir / 'feature_counts.csv'}")
-    # print(f"Saved plots to: {args.results_dir}")
-    # print(f"Completed training and evaluation in {timedelta(seconds=time.time()-tic)}")
+    print(f"\nSaved metrics to: {args.results_dir / 'metrics_summary.csv'}")
+    print(f"Saved feature counts to: {args.results_dir / 'feature_counts.csv'}")
+    print(f"Saved plots to: {args.results_dir}")
+    print(f"Completed training and evaluation in {timedelta(seconds=time.time()-tic)}")
     #
 
 if __name__ == "__main__":

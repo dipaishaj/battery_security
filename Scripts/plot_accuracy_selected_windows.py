@@ -87,11 +87,12 @@ def main():
         plt.ylim([.75, .95])
         plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
         plt.legend(loc="best", frameon=True, fontsize=24)
-        args.out_png.parent.mkdir(parents=True, exist_ok=True)
-        plt.show()
-        out_file = args.out_png.parent / f"lineplot_{metric}_plot.png"
+        out_dir = args.out_png
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_file = out_dir / f"lineplot_{metric}.png"
         plt.savefig(out_file, dpi=300, bbox_inches="tight")
         print(f"Saved: {out_file}")
+        plt.show()
         plt.close('all')
 
 if __name__ == "__main__":
